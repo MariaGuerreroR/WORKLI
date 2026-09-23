@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/routes.dart';
 import '../../models/project_model.dart';
+import '../../services/auth_service.dart';
 import '../../services/project_service.dart';
 import '../../utils/constants.dart';
 import '../../utils/validators.dart';
@@ -252,14 +253,17 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         .where((t) => t.isNotEmpty)
         .toList();
 
+    final user = AuthService.instance.currentUser;
+    final userId = user?.id ?? 'u1';
+
     final project = ProjectModel(
       id: 'temp',
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
       area: _areaController.text.trim().isEmpty ? null : _areaController.text.trim(),
       status: _status,
-      leadId: 'u1',
-      memberIds: ['u1'],
+      leadId: userId,
+      memberIds: [userId],
       startDate: _startDate,
       endDate: _endDate,
       budget: double.tryParse(_budgetController.text.trim()) ?? 0,
