@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 
 import '../../models/user_model.dart';
+import '../../models/project_model.dart';
 import '../../models/task_model.dart';
+import '../../models/report_model.dart';
 import '../../services/user_service.dart';
 import '../../services/project_service.dart';
 import '../../services/task_service.dart';
 import '../../services/report_service.dart';
+import '../../services/auth_service.dart';
+import '../../app/app.dart';
 import '../../utils/constants.dart';
 import '../../utils/helpers.dart';
 import '../../utils/validators.dart';
 import '../../widgets/metric_card.dart';
+import '../../widgets/project_card.dart';
+import '../../widgets/task_card.dart';
+import '../../widgets/empty_state.dart';
 import '../../widgets/connection_error_widget.dart';
 import '../app_scaffold.dart';
 
@@ -109,6 +116,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _reportService.getAllReports().where((r) => r.authorId == user.id).toList();
     final myProjects =
         _projectService.getAllProjects().where((p) => p.leadId == user.id).toList();
+    final completedTasks = myTasks.where((t) => t.status == TaskStatus.done).length;
 
     return AppScaffold(
       title: 'Perfil',
@@ -144,39 +152,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     SizedBox(
                       width: w,
-                      child: MetricCard(
-                        label: 'Proyectos Liderados',
-                        value: '${myProjects.length}',
-                        icon: Icons.folder_open,
-                        color: AppColors.primary,
+                      child: GestureDetector(
+                        onTap: () => _showProjectsDialog(myProjects),
+                        child: MetricCard(
+                          label: 'Proyectos Liderados',
+                          value: '${myProjects.length}',
+                          icon: Icons.folder_open,
+                          color: AppColors.primary,
+                        ),
                       ),
                     ),
                     SizedBox(
                       width: w,
-                      child: MetricCard(
-                        label: 'Tareas Asignadas',
-                        value: '${myTasks.length}',
-                        icon: Icons.checklist_rtl,
-                        color: AppColors.info,
+                      child: GestureDetector(
+                        onTap: () => _showTasksDialog(myTasks),
+                        child: MetricCard(
+                          label: 'Tareas Asignadas',
+                          value: '${myTasks.length}',
+                          icon: Icons.checklist_rtl,
+                          color: AppColors.info,
+                        ),
                       ),
                     ),
                     SizedBox(
                       width: w,
-                      child: MetricCard(
-                        label: 'Informes Creados',
-                        value: '${myReports.length}',
-                        icon: Icons.assessment,
-                        color: AppColors.accent,
+                      child: GestureDetector(
+                        onTap: () => _showReportsDialog(myReports),
+                        child: MetricCard(
+                          label: 'Informes Creados',
+                          value: '${myReports.length}',
+                          icon: Icons.assessment,
+                          color: AppColors.accent,
+                        ),
                       ),
                     ),
                     SizedBox(
                       width: w,
-                      child: MetricCard(
-                        label: 'Tareas Completadas',
-                        value:
-                            '${myTasks.where((t) => t.status == TaskStatus.done).length}',
-                        icon: Icons.task_alt,
-                        color: AppColors.success,
+                      child: GestureDetector(
+                        onTap: () => _showTasksDialog(myTasks),
+                        child: MetricCard(
+                          label: 'Tareas Completadas',
+                          value: '$completedTasks',
+                          icon: Icons.task_alt,
+                          color: AppColors.success,
+                        ),
                       ),
                     ),
                   ],
@@ -353,24 +372,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.symmetric(vertical: AppDimens.spaceSm),
       child: Column(
         children: [
-          _buildSettingItem(Icons.notifications_outlined, 'Notificaciones', 'Configurar alertas'),
-          _buildSettingItem(Icons.lock_outline, 'Privacidad', 'Gestionar permisos'),
-          _buildSettingItem(Icons.palette_outlined, 'Apariencia', 'Tema claro/oscuro'),
-          _buildSettingItem(Icons.language_outlined, 'Idioma', 'Español'),
-          _buildSettingItem(Icons.help_outline, 'Ayuda', 'Soporte y documentación'),
-          _buildSettingItem(Icons.logout, 'Cerrar Sesión', null, isDestructive: true),
+          _buildSettingItem(
+            Icons.notifications_outlined,
+            'Notificaciones',
+            'Configurar alertas',
+            onTap: () => _showNotificationsSettings(),
+          ),
+          _buildSettingItem(
+            Icons.lock_outline,
+            'Privacidad',
+            'Gestionar permisos',
+            onTap: () => _showPrivacySettings(),
+          ),
+          _buildSettingItem(
+            Icons.palette_outlined,
+            'Apariencia',
+            'Tema claro/oscuro',
+            onTap: () => _showAppearanceSettings(),
+          ),
+          _buildSettingItem(
+            Icons.language_outlined,
+            'Idioma',
+            'Español',
+            onTap: () => _showLanguageSettings(),
+          ),
+          _buildSettingItem(
+            Icons.help_outline,
+            'Ayuda',
+            'Soporte y documentación',
+            onTap: () => _showHelpSettings(),
+          ),
+          _buildSettingItem(
+            Icons.logout,
+            'Cerrar Sesión',
+            null,
+            isDestructive: true,
+            onTap: () => _confirmLogout(),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSettingItem(IconData icon, String title, String? subtitle,
-      {bool isDestructive = false}) {
+  Widget _buildSettingItem(
+    IconData icon,
+    String title,
+    String? subtitle, {
+    bool isDestructive = false,
+    VoidCallback? onTap,
+  }) {
     final color = isDestructive ? AppColors.error : AppColors.textPrimary;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {},
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppDimens.spaceLg,
@@ -407,6 +462,633 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showProjectsDialog(List<ProjectModel> projects) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimens.radiusL)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (ctx, scrollController) {
+            return Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceLg),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Proyectos Liderados',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(AppDimens.radiusS),
+                        ),
+                        child: Text(
+                          '${projects.length}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppDimens.spaceMd),
+                Expanded(
+                  child: projects.isEmpty
+                      ? const EmptyState(
+                          icon: Icons.folder_off,
+                          title: 'Sin proyectos liderados',
+                          message: 'No lideras ningún proyecto actualmente.',
+                        )
+                      : ListView.separated(
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(AppDimens.spaceLg),
+                          itemCount: projects.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: AppDimens.spaceMd),
+                          itemBuilder: (_, i) {
+                            final p = projects[i];
+                            final taskCount =
+                                _taskService.getTasksForProject(p.id).length;
+                            return ProjectCard(
+                              project: p,
+                              memberCount: p.memberIds.length,
+                              taskCount: taskCount,
+                              onTap: () {
+                                Navigator.pop(ctx);
+                                Navigator.pushNamed(
+                                  context,
+                                  '/projects/workspace',
+                                  arguments: p.id,
+                                );
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showTasksDialog(List<TaskModel> tasks) {
+    final pending = tasks.where((t) => t.status != TaskStatus.done).toList();
+    final completed = tasks.where((t) => t.status == TaskStatus.done).toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimens.radiusL)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (ctx, scrollController) {
+            return Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceLg),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Tareas Asignadas',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.info.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(AppDimens.radiusS),
+                        ),
+                        child: Text(
+                          '${tasks.length}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.info,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppDimens.spaceSm),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceLg),
+                  child: Row(
+                    children: [
+                      _buildMiniStat('Pendientes', pending.length, AppColors.warning),
+                      const SizedBox(width: AppDimens.spaceSm),
+                      _buildMiniStat('Completadas', completed.length, AppColors.success),
+                      const SizedBox(width: AppDimens.spaceSm),
+                      _buildMiniStat('Vencidas',
+                          tasks.where((t) => t.isOverdue).length, AppColors.error),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppDimens.spaceMd),
+                Expanded(
+                  child: tasks.isEmpty
+                      ? const EmptyState(
+                          icon: Icons.checklist_rtl,
+                          title: 'Sin tareas asignadas',
+                          message: 'No tienes tareas asignadas.',
+                        )
+                      : ListView.separated(
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(AppDimens.spaceLg),
+                          itemCount: tasks.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: AppDimens.spaceSm),
+                          itemBuilder: (_, i) {
+                            final t = tasks[i];
+                            final project = _projectService.getProjectById(t.projectId);
+                            return TaskCard(
+                              task: t,
+                              projectTitle: project?.title,
+                              onStatusChanged: (status) async {
+                                await _taskService.updateTaskStatus(t.id, status);
+                                setState(() {});
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMiniStat(String label, int count, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(AppDimens.radiusS),
+        ),
+        child: Column(
+          children: [
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: color,
+              ),
+            ),
+            Text(
+              label,
+              style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showReportsDialog(List<ReportModel> reports) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimens.radiusL)),
+      ),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (ctx, scrollController) {
+            return Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppDimens.spaceLg),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Informes Creados',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(AppDimens.radiusS),
+                        ),
+                        child: Text(
+                          '${reports.length}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.accent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppDimens.spaceMd),
+                Expanded(
+                  child: reports.isEmpty
+                      ? const EmptyState(
+                          icon: Icons.assessment,
+                          title: 'Sin informes creados',
+                          message: 'No has creado ningún informe todavía.',
+                        )
+                      : ListView.separated(
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(AppDimens.spaceLg),
+                          itemCount: reports.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: AppDimens.spaceMd),
+                          itemBuilder: (_, i) {
+                            final r = reports[i];
+                            final project =
+                                _projectService.getProjectById(r.projectId);
+                            final delta = r.progressDelta;
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius:
+                                    BorderRadius.circular(AppDimens.radiusL),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              padding: const EdgeInsets.all(AppDimens.spaceLg),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 36,
+                                        height: 36,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.accent.withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(
+                                              AppDimens.radiusM),
+                                        ),
+                                        child: const Icon(Icons.description,
+                                            color: AppColors.accent, size: 18),
+                                      ),
+                                      const SizedBox(width: AppDimens.spaceMd),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              r.title,
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.textPrimary,
+                                              ),
+                                            ),
+                                            Text(
+                                              project?.title ?? 'Proyecto',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: AppColors.textMuted),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: (delta >= 0
+                                                  ? AppColors.success
+                                                  : AppColors.error)
+                                              .withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(
+                                              AppDimens.radiusS),
+                                        ),
+                                        child: Text(
+                                          '${delta >= 0 ? '+' : ''}$delta%',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: delta >= 0
+                                                ? AppColors.success
+                                                : AppColors.error,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: AppDimens.spaceSm),
+                                  if (r.summary.isNotEmpty)
+                                    Text(
+                                      r.summary,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        height: 1.4,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  const SizedBox(height: AppDimens.spaceSm),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        '${Helpers.formatDateShort(r.periodStart)} - ${Helpers.formatDateShort(r.periodEnd)}',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.textMuted),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        Helpers.timeAgo(r.createdAt),
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.textMuted),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showNotificationsSettings() {
+    bool emailAlerts = true;
+    bool pushAlerts = true;
+    bool deadlineReminders = true;
+    bool taskAssignments = true;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Notificaciones'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile(
+                    title: const Text('Alertas por correo'),
+                    value: emailAlerts,
+                    onChanged: (v) => setDialogState(() => emailAlerts = v),
+                  ),
+                  SwitchListTile(
+                    title: const Text('Notificaciones push'),
+                    value: pushAlerts,
+                    onChanged: (v) => setDialogState(() => pushAlerts = v),
+                  ),
+                  SwitchListTile(
+                    title: const Text('Recordatorios de fechas'),
+                    value: deadlineReminders,
+                    onChanged: (v) =>
+                        setDialogState(() => deadlineReminders = v),
+                  ),
+                  SwitchListTile(
+                    title: const Text('Asignación de tareas'),
+                    value: taskAssignments,
+                    onChanged: (v) =>
+                        setDialogState(() => taskAssignments = v),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cerrar'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Preferencias guardadas'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  },
+                  child: const Text('Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showPrivacySettings() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Privacidad'),
+        content: const Text(
+          'Tu información es visible solo para los miembros de tus proyectos. '
+          'Los colaboradores externos solo pueden ver los proyectos en los que participan.',
+          style: TextStyle(fontSize: 14, height: 1.5, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAppearanceSettings() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Apariencia'),
+        content: const Text(
+          'El tema de la aplicación se ajusta automáticamente según la configuración de tu dispositivo (claro u oscuro).',
+          style: TextStyle(fontSize: 14, height: 1.5, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLanguageSettings() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Idioma'),
+        content: const Text(
+          'Workli está disponible en español. Más idiomas próximamente.',
+          style: TextStyle(fontSize: 14, height: 1.5, color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showHelpSettings() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ayuda y Soporte'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Recursos disponibles:',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.book_outlined, size: 18, color: AppColors.primary),
+                SizedBox(width: 8),
+                Text('Documentación de usuario', style: TextStyle(fontSize: 13)),
+              ],
+            ),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.support_agent, size: 18, color: AppColors.primary),
+                SizedBox(width: 8),
+                Text('Contactar soporte', style: TextStyle(fontSize: 13)),
+              ],
+            ),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.feedback_outlined, size: 18, color: AppColors.primary),
+                SizedBox(width: 8),
+                Text('Enviar comentarios', style: TextStyle(fontSize: 13)),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmLogout() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Cerrar Sesión'),
+        content: const Text('¿Seguro que quieres cerrar sesión?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await AuthService.instance.logout();
+              if (mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const WorkliApp()),
+                  (_) => false,
+                );
+              }
+            },
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Cerrar Sesión'),
+          ),
+        ],
       ),
     );
   }
